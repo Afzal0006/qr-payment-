@@ -4,10 +4,11 @@ import qrcode
 from telegram import Update
 from telegram.ext import Application, CommandHandler, ContextTypes, MessageHandler, filters
 from pymongo import MongoClient
+import os
 
 # ================= CONFIG =================
-BOT_TOKEN = "8311824260:AAEXchUpld4AlE9Ifa1IPVOcj5sCG1KKLUo"
-MONGO_URI = "mongodb+srv://afzal99550:afzal99550@cluster0.aqmbh9q.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0"
+BOT_TOKEN = os.getenv("BOT_TOKEN", "8311824260:AAEXchUpld4AlE9Ifa1IPVOcj5sCG1KKLUo")
+MONGO_URI = os.getenv("MONGO_URI", "mongodb+srv://afzal99550:afzal99550@cluster0.aqmbh9q.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0")
 DB_NAME = "qr_bot"
 COLLECTION_NAME = "commands"
 CURRENCY = "INR"
@@ -99,7 +100,7 @@ def main():
     # Dynamic handler for all other commands
     app.add_handler(MessageHandler(filters.COMMAND, dynamic_qr_cmd))
 
-    app.run_polling(close_loop=False)
+    app.run_polling()
 
 if __name__ == "__main__":
     main()
