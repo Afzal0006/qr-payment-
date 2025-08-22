@@ -7,7 +7,7 @@ from pymongo import MongoClient
 import re
 
 # ================= CONFIG =================
-BOT_TOKEN = "8311824260:AAEXchUpld4AlE9Ifa1IPVOcj5sCG1KKLUo"
+BOT_TOKEN = "8178528811:AAFU-apXWWMK-rNFl2EyiHdOhAnbjLkqJBQ"
 MONGO_URI = "mongodb+srv://afzal99550:afzal99550@cluster0.aqmbh9q.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0"
 DB_NAME = "qr_bot"
 COLLECTION_NAME = "commands"
