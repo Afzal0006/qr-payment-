@@ -19,7 +19,7 @@ client = MongoClient(MONGO_URI)
 db = client[DB_NAME]
 collection = db[COLLECTION_NAME]
 
-# --- QR generator functions ---
+# --- QR generator ---
 def build_upi_link(amount: Decimal, upi_id: str) -> str:
     am_str = f"{amount:.2f}"
     return f"upi://pay?pa={upi_id}&am={am_str}&cu={CURRENCY}"
@@ -42,7 +42,7 @@ async def start_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "Then use it like: /aQr 50"
     )
 
-# --- /save {command} {upi_id} ---
+# --- /save ---
 async def save_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if len(context.args) != 2:
         await update.message.reply_text(
@@ -62,9 +62,9 @@ async def save_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"Command /{unique_command} saved successfully! You can now use /{unique_command} <amount> to generate QR."
     )
 
-# --- Dynamic command handler ---
+# --- Dynamic QR handler ---
 async def dynamic_qr_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    cmd = update.message.text.split()[0][1:].lower()  # remove "/" from command
+    cmd = update.message.text.split()[0][1:].lower()  # remove "/" 
     data = collection.find_one({"command": cmd})
     if not data:
         await update.message.reply_text("Command not found. Use /save to create your command first.")
@@ -96,8 +96,6 @@ def main():
 
     app.add_handler(CommandHandler("start", start_cmd))
     app.add_handler(CommandHandler("save", save_cmd))
-    
-    # Dynamic handler for all other commands
     app.add_handler(MessageHandler(filters.COMMAND, dynamic_qr_cmd))
 
     app.run_polling()
