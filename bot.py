@@ -1,20 +1,27 @@
 from io import BytesIO
 from decimal import Decimal, InvalidOperation
-
-from telegram import Update
-from telegram.ext import Application, CommandHandler, ContextTypes
 import qrcode
+from telegram import Update
+from telegram.ext import Application, CommandHandler, ContextTypes, MessageHandler, filters
+from pymongo import MongoClient
 
-# ==== CONFIG ====
-BOT_TOKEN = "8311824260:AAEXchUpld4AlE9Ifa1IPVOcj5sCG1KKLUo"  # <- AAPKA TOKEN
-UPI_ID = "afzalparwez9955@ybl"   # <- Default UPI
-PAYEE_NAME = "Afzal Parwez"      # <- Default name
+# ================= CONFIG =================
+BOT_TOKEN = "8311824260:AAEXchUpld4AlE9Ifa1IPVOcj5sCG1KKLUo"
+MONGO_URI = "mongodb+srv://afzal99550:afzal99550@cluster0.aqmbh9q.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0"
+DB_NAME = "qr_bot"
+COLLECTION_NAME = "commands"
 CURRENCY = "INR"
-# =================
+# ==========================================
 
-def build_upi_link(amount: Decimal, upi_id: str, payee_name: str) -> str:
-    am_str = f"{amount:.2f}"  # 2 decimal tak
-    return f"upi://pay?pa={upi_id}&pn={payee_name}&am={am_str}&cu={CURRENCY}"
+# MongoDB client
+client = MongoClient(MONGO_URI)
+db = client[DB_NAME]
+collection = db[COLLECTION_NAME]
+
+# --- QR generator functions ---
+def build_upi_link(amount: Decimal, upi_id: str) -> str:
+    am_str = f"{amount:.2f}"
+    return f"upi://pay?pa={upi_id}&am={am_str}&cu={CURRENCY}"
 
 def make_qr_png_bytes(data: str) -> BytesIO:
     img = qrcode.make(data)
@@ -24,90 +31,73 @@ def make_qr_png_bytes(data: str) -> BytesIO:
     bio.seek(0)
     return bio
 
-async def qr_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not context.args:
-        await update.message.reply_text("Usage: /qr <amount>\nExample: /qr 67")
-        return
-
-    try:
-        amt = Decimal(context.args[0])
-        if amt <= 0:
-            raise InvalidOperation
-        if amt > Decimal("1000000"):
-            await update.message.reply_text("Amount bahut bada hai.")
-            return
-    except InvalidOperation:
-        await update.message.reply_text("Invalid amount. Example: /qr 67  ya  /qr 88.50")
-        return
-
-    upi_link = build_upi_link(amt, UPI_ID, PAYEE_NAME)
-    qr_bytes = make_qr_png_bytes(upi_link)
-
-    caption = (
-        f"UPI: `{UPI_ID}`\n"
-        f"Name: {PAYEE_NAME}\n"
-        f"Amount: ₹{amt:.2f}\n\n"
-        f"Scan karke pay karein."
-    )
-
-    await update.message.reply_photo(
-        photo=qr_bytes,
-        caption=caption,
-        parse_mode="Markdown"
-    )
-
-# ---- New /pmqr command ----
-async def pmqr_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not context.args:
-        await update.message.reply_text("Usage: /pmqr <amount>\nExample: /pmqr 50")
-        return
-
-    try:
-        amt = Decimal(context.args[0])
-        if amt <= 0:
-            raise InvalidOperation
-        if amt > Decimal("1000000"):
-            await update.message.reply_text("Amount bahut bada hai.")
-            return
-    except InvalidOperation:
-        await update.message.reply_text("Invalid amount. Example: /pmqr 50  ya  /pmqr 88.50")
-        return
-
-    # Fixed UPI for /pmqr
-    pm_upi_id = "santoshtiwari120@naviaxis"
-    pm_payee_name = "Santoshi Wari"
-    upi_link = build_upi_link(amt, pm_upi_id, pm_payee_name)
-    qr_bytes = make_qr_png_bytes(upi_link)
-
-    caption = (
-        f"UPI: `{pm_upi_id}`\n"
-        f"Name: {pm_payee_name}\n"
-        f"Amount: ₹{amt:.2f}\n\n"
-        f"Scan karke pay karein."
-    )
-
-    await update.message.reply_photo(
-        photo=qr_bytes,
-        caption=caption,
-        parse_mode="Markdown"
-    )
-
-# ---- /start command ----
+# --- /start ---
 async def start_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
-        "Namaste! Commands:\n"
-        "/qr <amount> - Default UPI QR\n"
-        "/pmqr <amount> - Santoshi Wari UPI QR\n\n"
-        "Example: /qr 67 or /pmqr 50"
+        "Hi! I'm an automatic QR generator bot 🤖\n\n"
+        "Commands:\n"
+        "/save {unique_command} {upi_id} - Save your UPI command.\n\n"
+        "Example:\n/save aQr afzalparwez9955@ybl\n\n"
+        "Then use it like: /aQr 50"
     )
 
-# ---- Main ----
+# --- /save {command} {upi_id} ---
+async def save_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if len(context.args) != 2:
+        await update.message.reply_text(
+            "Usage: /save {unique_command} {upi_id}\nExample: /save aQr afzalparwez9955@ybl"
+        )
+        return
+
+    unique_command = context.args[0].lower()
+    upi_id = context.args[1]
+
+    if collection.find_one({"command": unique_command}):
+        await update.message.reply_text("This command is already taken. Please choose another one.")
+        return
+
+    collection.insert_one({"command": unique_command, "upi_id": upi_id})
+    await update.message.reply_text(
+        f"Command /{unique_command} saved successfully! You can now use /{unique_command} <amount> to generate QR."
+    )
+
+# --- Dynamic command handler ---
+async def dynamic_qr_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    cmd = update.message.text.split()[0][1:].lower()  # remove "/" from command
+    data = collection.find_one({"command": cmd})
+    if not data:
+        await update.message.reply_text("Command not found. Use /save to create your command first.")
+        return
+
+    if not context.args:
+        await update.message.reply_text(f"Usage: /{cmd} <amount>\nExample: /{cmd} 50")
+        return
+
+    try:
+        amt = Decimal(context.args[0])
+        if amt <= 0 or amt > Decimal("1000000"):
+            await update.message.reply_text("Invalid amount. Must be >0 and <= 1,000,000.")
+            return
+    except InvalidOperation:
+        await update.message.reply_text(f"Invalid amount. Example: /{cmd} 50 or /{cmd} 88.50")
+        return
+
+    upi_id = data["upi_id"]
+    upi_link = build_upi_link(amt, upi_id)
+    qr_bytes = make_qr_png_bytes(upi_link)
+
+    caption = f"UPI: `{upi_id}`\nAmount: ₹{amt:.2f}\nScan to pay."
+    await update.message.reply_photo(photo=qr_bytes, caption=caption, parse_mode="Markdown")
+
+# --- Main ---
 def main():
     app = Application.builder().token(BOT_TOKEN).build()
 
     app.add_handler(CommandHandler("start", start_cmd))
-    app.add_handler(CommandHandler("qr", qr_cmd))
-    app.add_handler(CommandHandler("pmqr", pmqr_cmd))
+    app.add_handler(CommandHandler("save", save_cmd))
+    
+    # Dynamic handler for all other commands
+    app.add_handler(MessageHandler(filters.COMMAND, dynamic_qr_cmd))
 
     app.run_polling(close_loop=False)
 
