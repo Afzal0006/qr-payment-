@@ -4,11 +4,11 @@ import qrcode
 from telegram import Update
 from telegram.ext import Application, CommandHandler, ContextTypes, MessageHandler, filters
 from pymongo import MongoClient
-import os
+import re
 
 # ================= CONFIG =================
-BOT_TOKEN = os.getenv("BOT_TOKEN", "8311824260:AAEXchUpld4AlE9Ifa1IPVOcj5sCG1KKLUo")
-MONGO_URI = os.getenv("MONGO_URI", "mongodb+srv://afzal99550:afzal99550@cluster0.aqmbh9q.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0")
+BOT_TOKEN = "8311824260:AAEXchUpld4AlE9Ifa1IPVOcj5sCG1KKLUo"
+MONGO_URI = "mongodb+srv://afzal99550:afzal99550@cluster0.aqmbh9q.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0"
 DB_NAME = "qr_bot"
 COLLECTION_NAME = "commands"
 CURRENCY = "INR"
@@ -35,11 +35,11 @@ def make_qr_png_bytes(data: str) -> BytesIO:
 # --- /start ---
 async def start_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
-        "Hi! I'm an automatic QR generator bot 🤖\n\n"
+        "Hi! I'm a QR generator bot 🤖\n\n"
         "Commands:\n"
-        "/save {unique_command} {upi_id} - Save your UPI command.\n\n"
-        "Example:\n/save aQr afzalparwez9955@ybl\n\n"
-        "Then use it like: /aQr 50"
+        "/save {unique_command} {upi_id} - Save your UPI command.\n"
+        "Example: /save aQr afzalparwez9955@ybl\n"
+        "Then use: /aQr 50"
     )
 
 # --- /save ---
@@ -50,8 +50,12 @@ async def save_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return
 
-    unique_command = context.args[0].lower()
-    upi_id = context.args[1]
+    unique_command = context.args[0].strip().lower()
+    upi_id = context.args[1].strip()
+
+    if not re.fullmatch(r'[a-zA-Z0-9]+', unique_command):
+        await update.message.reply_text("Command should be alphanumeric only (no spaces/special chars).")
+        return
 
     if collection.find_one({"command": unique_command}):
         await update.message.reply_text("This command is already taken. Please choose another one.")
@@ -59,25 +63,30 @@ async def save_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     collection.insert_one({"command": unique_command, "upi_id": upi_id})
     await update.message.reply_text(
-        f"Command /{unique_command} saved successfully! You can now use /{unique_command} <amount> to generate QR."
+        f"Command /{unique_command} saved successfully! Use /{unique_command} <amount> to generate QR."
     )
 
 # --- Dynamic QR handler ---
 async def dynamic_qr_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    cmd = update.message.text.split()[0][1:].lower()  # remove "/" 
-    data = collection.find_one({"command": cmd})
-    if not data:
-        await update.message.reply_text("Command not found. Use /save to create your command first.")
+    if not update.message.text.startswith("/"):
         return
 
-    if not context.args:
+    parts = update.message.text.split()
+    cmd = parts[0][1:].strip().lower()
+    args = parts[1:]
+
+    data = collection.find_one({"command": cmd})
+    if not data:
+        return
+
+    if len(args) != 1:
         await update.message.reply_text(f"Usage: /{cmd} <amount>\nExample: /{cmd} 50")
         return
 
     try:
-        amt = Decimal(context.args[0])
+        amt = Decimal(args[0])
         if amt <= 0 or amt > Decimal("1000000"):
-            await update.message.reply_text("Invalid amount. Must be >0 and <= 1,000,000.")
+            await update.message.reply_text("Invalid amount. Must be >0 and <=1,000,000.")
             return
     except InvalidOperation:
         await update.message.reply_text(f"Invalid amount. Example: /{cmd} 50 or /{cmd} 88.50")
