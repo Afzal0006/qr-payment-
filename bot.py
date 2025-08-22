@@ -5,7 +5,6 @@ from telegram import Update
 from telegram.ext import Application, CommandHandler, ContextTypes, MessageHandler, filters
 from pymongo import MongoClient
 import re
-import asyncio
 
 # ================= CONFIG =================
 BOT_TOKEN = "8311824260:AAEXchUpld4AlE9Ifa1IPVOcj5sCG1KKLUo"
@@ -15,6 +14,7 @@ COLLECTION_NAME = "commands"
 CURRENCY = "INR"
 # ==========================================
 
+# MongoDB client
 client = MongoClient(MONGO_URI)
 db = client[DB_NAME]
 collection = db[COLLECTION_NAME]
@@ -100,15 +100,15 @@ async def dynamic_qr_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_photo(photo=qr_bytes, caption=caption, parse_mode="Markdown")
 
 # --- Main ---
-async def main():
+def main():
     app = Application.builder().token(BOT_TOKEN).build()
 
     app.add_handler(CommandHandler("start", start_cmd))
     app.add_handler(CommandHandler("save", save_cmd))
     app.add_handler(MessageHandler(filters.COMMAND, dynamic_qr_cmd))
 
-    await app.run_polling()
+    # Heroku ke liye stable run_polling
+    app.run_polling()
 
 if __name__ == "__main__":
-    import asyncio
-    asyncio.run(main())
+    main()
