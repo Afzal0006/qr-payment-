@@ -38,8 +38,8 @@ async def start_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "Hi! I'm a QR generator bot 🤖\n\n"
         "Commands:\n"
         "/save {unique_command} {upi_id} - Save your UPI command.\n"
-        "Example: /save aQr afzalparwez9955@ybl\n"
-        "Then use: /aQr 50"
+        "Example: /save shish fgashish3@okicici\n"
+        "Then use: /ashish 50"
     )
 
 # --- /save ---
